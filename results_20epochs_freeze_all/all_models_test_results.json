@@ -1,0 +1,103 @@
+{
+    "vgg19": {
+        "accuracy": 0.9412662090007627,
+        "roc_auc_macro": 0.9934835307345207,
+        "precision_macro": 0.9398889871019191,
+        "recall_macro": 0.9372948438634713,
+        "f1_macro": 0.935666997162554,
+        "precision_per_class": {
+            "glioma": 0.8579881656804734,
+            "meningioma": 0.9604743083003953,
+            "notumor": 0.9950617283950617,
+            "pituitary": 0.946031746031746
+        },
+        "recall_per_class": {
+            "glioma": 0.9666666666666667,
+            "meningioma": 0.7941176470588235,
+            "notumor": 0.9950617283950617,
+            "pituitary": 0.9933333333333333
+        },
+        "f1_per_class": {
+            "glioma": 0.9090909090909091,
+            "meningioma": 0.8694096601073346,
+            "notumor": 0.9950617283950617,
+            "pituitary": 0.9691056910569106
+        }
+    },
+    "resnet50": {
+        "accuracy": 0.9794050343249427,
+        "roc_auc_macro": 0.9981862127586456,
+        "precision_macro": 0.9789469746373941,
+        "recall_macro": 0.9779121278140886,
+        "f1_macro": 0.978412680494336,
+        "precision_per_class": {
+            "glioma": 0.9765886287625418,
+            "meningioma": 0.9639344262295082,
+            "notumor": 0.9853658536585366,
+            "pituitary": 0.98989898989899
+        },
+        "recall_per_class": {
+            "glioma": 0.9733333333333334,
+            "meningioma": 0.9607843137254902,
+            "notumor": 0.9975308641975309,
+            "pituitary": 0.98
+        },
+        "f1_per_class": {
+            "glioma": 0.9749582637729549,
+            "meningioma": 0.9623567921440261,
+            "notumor": 0.9914110429447853,
+            "pituitary": 0.9849246231155779
+        }
+    },
+    "efficientnet_b0": {
+        "accuracy": 0.9641495041952708,
+        "roc_auc_macro": 0.9970342242690267,
+        "precision_macro": 0.9653586974792183,
+        "recall_macro": 0.9611801016702977,
+        "f1_macro": 0.9617953344109083,
+        "precision_per_class": {
+            "glioma": 1.0,
+            "meningioma": 0.8869047619047619,
+            "notumor": 0.9877750611246944,
+            "pituitary": 0.9867549668874173
+        },
+        "recall_per_class": {
+            "glioma": 0.88,
+            "meningioma": 0.9738562091503268,
+            "notumor": 0.9975308641975309,
+            "pituitary": 0.9933333333333333
+        },
+        "f1_per_class": {
+            "glioma": 0.9361702127659575,
+            "meningioma": 0.9283489096573209,
+            "notumor": 0.9926289926289926,
+            "pituitary": 0.9900332225913622
+        }
+    },
+    "ensemble": {
+        "accuracy": 0.9824561403508771,
+        "roc_auc_macro": 0.9985043357242828,
+        "precision_macro": 0.9816500252127676,
+        "recall_macro": 0.9810130718954249,
+        "f1_macro": 0.9812833415586878,
+        "precision_per_class": {
+            "glioma": 0.9863481228668942,
+            "meningioma": 0.9640522875816994,
+            "notumor": 0.9926470588235294,
+            "pituitary": 0.9835526315789473
+        },
+        "recall_per_class": {
+            "glioma": 0.9633333333333334,
+            "meningioma": 0.9640522875816994,
+            "notumor": 1.0,
+            "pituitary": 0.9966666666666667
+        },
+        "f1_per_class": {
+            "glioma": 0.9747048903878583,
+            "meningioma": 0.9640522875816994,
+            "notumor": 0.996309963099631,
+            "pituitary": 0.9900662251655629
+        },
+        "average_confidence": 0.9760048389434814
+    }
+}

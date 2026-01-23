@@ -1,0 +1,8 @@
+Ensemble Confusion Matrix
+============================================================
+
+            glioma        meningioma    notumor       pituitary   
+glioma               279            19             0             2
+meningioma             0           300             1             5
+notumor                0             3           402             0
+pituitary              0             5             0           295

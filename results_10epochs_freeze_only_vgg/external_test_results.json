@@ -1,0 +1,188 @@
+{
+    "vgg19": {
+        "accuracy": 0.8053892215568862,
+        "precision_macro": 0.41668867346236516,
+        "recall_macro": 0.40269461077844315,
+        "f1_macro": 0.4095396535566955,
+        "precision_per_class": {
+            "glioma": 0.8381532217148655,
+            "meningioma": 0.8286014721345951,
+            "notumor": 0.0,
+            "pituitary": 0.0
+        },
+        "recall_per_class": {
+            "glioma": 0.8243512974051896,
+            "meningioma": 0.7864271457085829,
+            "notumor": 0.0,
+            "pituitary": 0.0
+        },
+        "f1_per_class": {
+            "glioma": 0.8311949685534591,
+            "meningioma": 0.8069636456733231,
+            "notumor": 0.0,
+            "pituitary": 0.0
+        },
+        "confusion_matrix": [
+            [
+                1652,
+                326,
+                21,
+                5
+            ],
+            [
+                319,
+                1576,
+                35,
+                74
+            ],
+            [
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                0,
+                0,
+                0
+            ]
+        ],
+        "classification_report": "              precision    recall  f1-score   support\n\n      glioma       0.84      0.82      0.83      2004\n  meningioma       0.83      0.79      0.81      2004\n     notumor       0.00      0.00      0.00         0\n   pituitary       0.00      0.00      0.00         0\n\n    accuracy                           0.81      4008\n   macro avg       0.42      0.40      0.41      4008\nweighted avg       0.83      0.81      0.82      4008\n"
+    },
+    "resnet50": {
+        "accuracy": 0.7819361277445109,
+        "precision_macro": 0.47774907458220495,
+        "recall_macro": 0.39096806387225547,
+        "f1_macro": 0.43002389083535986,
+        "precision_per_class": {
+            "glioma": 0.963980463980464,
+            "meningioma": 0.9470158343483557,
+            "notumor": 0.0,
+            "pituitary": 0.0
+        },
+        "recall_per_class": {
+            "glioma": 0.7879241516966068,
+            "meningioma": 0.7759481037924152,
+            "notumor": 0.0,
+            "pituitary": 0.0
+        },
+        "f1_per_class": {
+            "glioma": 0.8671059857221307,
+            "meningioma": 0.8529895776193088,
+            "notumor": 0.0,
+            "pituitary": 0.0
+        },
+        "confusion_matrix": [
+            [
+                1579,
+                87,
+                284,
+                54
+            ],
+            [
+                59,
+                1555,
+                351,
+                39
+            ],
+            [
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                0,
+                0,
+                0
+            ]
+        ],
+        "classification_report": "              precision    recall  f1-score   support\n\n      glioma       0.96      0.79      0.87      2004\n  meningioma       0.95      0.78      0.85      2004\n     notumor       0.00      0.00      0.00         0\n   pituitary       0.00      0.00      0.00         0\n\n    accuracy                           0.78      4008\n   macro avg       0.48      0.39      0.43      4008\nweighted avg       0.96      0.78      0.86      4008\n"
+    },
+    "efficientnet_b0": {
+        "accuracy": 0.9051896207584831,
+        "precision_macro": 0.48845214027024275,
+        "recall_macro": 0.45259481037924154,
+        "f1_macro": 0.4694095912575513,
+        "precision_per_class": {
+            "glioma": 0.9715736040609138,
+            "meningioma": 0.9822349570200573,
+            "notumor": 0.0,
+            "pituitary": 0.0
+        },
+        "recall_per_class": {
+            "glioma": 0.9550898203592815,
+            "meningioma": 0.8552894211576846,
+            "notumor": 0.0,
+            "pituitary": 0.0
+        },
+        "f1_per_class": {
+            "glioma": 0.9632611977856065,
+            "meningioma": 0.9143771672445986,
+            "notumor": 0.0,
+            "pituitary": 0.0
+        },
+        "confusion_matrix": [
+            [
+                1914,
+                31,
+                58,
+                1
+            ],
+            [
+                56,
+                1714,
+                226,
+                8
+            ],
+            [
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                0,
+                0,
+                0
+            ]
+        ],
+        "classification_report": "              precision    recall  f1-score   support\n\n      glioma       0.97      0.96      0.96      2004\n  meningioma       0.98      0.86      0.91      2004\n     notumor       0.00      0.00      0.00         0\n   pituitary       0.00      0.00      0.00         0\n\n    accuracy                           0.91      4008\n   macro avg       0.49      0.45      0.47      4008\nweighted avg       0.98      0.91      0.94      4008\n"
+    },
+    "ensemble": {
+        "accuracy": 0.9131736526946108,
+        "precision_macro": 0.483098312094791,
+        "recall_macro": 0.4565868263473054,
+        "f1_macro": 0.46899387687126687,
+        "confusion_matrix": [
+            [
+                1924,
+                39,
+                40,
+                1
+            ],
+            [
+                92,
+                1736,
+                163,
+                13
+            ],
+            [
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                0,
+                0,
+                0
+            ]
+        ],
+        "classification_report": "              precision    recall  f1-score   support\n\n      glioma       0.95      0.96      0.96      2004\n  meningioma       0.98      0.87      0.92      2004\n     notumor       0.00      0.00      0.00         0\n   pituitary       0.00      0.00      0.00         0\n\n    accuracy                           0.91      4008\n   macro avg       0.48      0.46      0.47      4008\nweighted avg       0.97      0.91      0.94      4008\n"
+    }
+}
