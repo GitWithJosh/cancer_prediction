@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 import sys
 import random
+import json
+import hashlib
 
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent))
@@ -30,42 +32,65 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Custom CSS - Modern Minimalistic Design
 st.markdown("""
 <style>
+    /* Main Layout */
     .main-header {
-        font-size: 3rem;
-        font-weight: bold;
+        font-size: 2.5rem;
+        font-weight: 300;
+        letter-spacing: -0.5px;
         text-align: center;
-        color: #1f77b4;
-        margin-bottom: 1rem;
+        color: #111;
+        margin-bottom: 0.5rem;
     }
     .sub-header {
-        font-size: 1.2rem;
+        font-size: 1rem;
+        font-weight: 300;
         text-align: center;
         color: #666;
-        margin-bottom: 2rem;
+        margin-bottom: 3rem;
     }
+    
+    /* Prediction Box - Minimalistic */
     .prediction-box {
         padding: 2rem;
-        border-radius: 10px;
-        background-color: #f0f2f6;
-        margin: 1rem 0;
+        border-radius: 12px;
+        background-color: #fafafa;
+        border: 1px solid #e0e0e0;
+        margin: 1.5rem 0;
     }
     .tumor-detected {
-        background-color: #ffebee;
-        border-left: 5px solid #f44336;
+        background-color: #fff5f5;
+        border: 1px solid #ff6b6b;
     }
     .no-tumor {
-        background-color: #e8f5e9;
-        border-left: 5px solid #4caf50;
+        background-color: #f0fdf4;
+        border: 1px solid #22c55e;
     }
+    
+    /* Clean Metrics */
     .metric-card {
-        padding: 1rem;
-        border-radius: 5px;
-        background-color: white;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        padding: 1.5rem;
+        border-radius: 8px;
+        background-color: #fff;
+        border: 1px solid #e5e5e5;
     }
+    
+    /* Streamlit Component Overrides */
+    .stButton>button {
+        border-radius: 8px;
+        font-weight: 400;
+        transition: all 0.2s;
+    }
+    
+    .stProgress > div > div > div {
+        border-radius: 4px;
+    }
+    
+    /* Hide Streamlit Branding for Cleaner Look */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -108,6 +133,52 @@ CLASS_INFO = {
 }
 
 @st.cache_data
+def get_cache_filepath(model_name):
+    """Get the cache file path for a specific model."""
+    cache_dir = Path("prediction_cache")
+    cache_dir.mkdir(exist_ok=True)
+    
+    # Sanitize model name for filename
+    safe_model_name = model_name.lower().replace(' ', '_').replace('(', '').replace(')', '')
+    return cache_dir / f"{safe_model_name}_predictions.json"
+
+
+def load_predictions_cache(model_name):
+    """
+    Load predictions from disk cache if available.
+    
+    Returns:
+        Dictionary of predictions or empty dict if cache doesn't exist
+    """
+    cache_file = get_cache_filepath(model_name)
+    
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            st.warning(f"Could not load cache: {e}")
+            return {}
+    return {}
+
+
+def save_predictions_cache(model_name, predictions):
+    """
+    Save predictions to disk cache.
+    
+    Args:
+        model_name: Name of the model
+        predictions: Dictionary of predictions to save
+    """
+    cache_file = get_cache_filepath(model_name)
+    
+    try:
+        with open(cache_file, 'w') as f:
+            json.dump(predictions, f, indent=2)
+    except Exception as e:
+        st.warning(f"Could not save cache: {e}")
+
+
 def get_test_images():
     """Get list of test images with their ground truth labels."""
     test_dir = Path("cancer_prediction_images/Testing")
@@ -188,7 +259,65 @@ def preprocess_for_display(image):
     return display_image
 
 
-def predict_image(image, model_name, models, device):
+def precompute_all_predictions(model_name, models, device, test_images):
+    """
+    Precompute predictions for all test images with the current model.
+    Uses persistent cache on disk.
+    
+    Args:
+        model_name: Name of the model to use
+        models: Dictionary of loaded models
+        device: Device to run on
+        test_images: Dictionary of test image paths and their ground truth labels
+        
+    Returns:
+        Dictionary mapping (image_path, model_key) to prediction
+    """
+    model_key = model_name.lower().replace('-', '_').replace(' (majority voting)', '').replace('ensemble', 'ensemble')
+    
+    # Try to load from persistent cache first
+    cached_predictions = load_predictions_cache(model_name)
+    
+    # Check if we need to compute any new predictions
+    predictions = {}
+    images_to_compute = []
+    
+    for img_path in test_images.keys():
+        cache_key = f"{img_path}_{model_key}"
+        if cache_key in cached_predictions:
+            predictions[cache_key] = cached_predictions[cache_key]
+        else:
+            images_to_compute.append(img_path)
+    
+    # Compute predictions for images not in cache
+    if images_to_compute:
+        progress_bar = st.progress(0, text=f"Computing {len(images_to_compute)} new predictions...")
+        total = len(images_to_compute)
+        
+        for idx, img_path in enumerate(images_to_compute):
+            try:
+                temp_image = Image.open(img_path).convert('RGB')
+                prediction, _, _, _, _ = predict_image(temp_image, model_name, models, device)
+                cache_key = f"{img_path}_{model_key}"
+                predictions[cache_key] = prediction
+                
+                # Update progress
+                progress_bar.progress((idx + 1) / total, text=f"Computing predictions... {idx + 1}/{total}")
+            except Exception as e:
+                # Skip images that fail
+                continue
+        
+        progress_bar.empty()
+        
+        # Save updated cache to disk
+        save_predictions_cache(model_name, predictions)
+    else:
+        st.success(f"✓ Loaded {len(predictions)} predictions from cache")
+    
+    return predictions
+
+
+def predict_image(image, model_name, models, device, return_individual_predictions=False):
     """
     Perform prediction on an image.
     
@@ -197,23 +326,32 @@ def predict_image(image, model_name, models, device):
         model_name: Name of the model to use
         models: Dictionary of loaded models
         device: Device to run on
+        return_individual_predictions: For ensemble, return individual model predictions
         
     Returns:
-        Tuple of (prediction, confidence, all_probabilities, processing_time)
+        Tuple of (prediction, confidence, all_probabilities, processing_time, individual_predictions)
+        individual_predictions is None for non-ensemble models
     """
     start_time = time.time()
     
     # Preprocess image
     image_tensor = preprocess_pil_image(image, image_size=224)
     
+    individual_predictions = None
+    
     # Get model
     if model_name == "Ensemble (Majority Voting)":
         if 'ensemble' in models:
-            pred_idx, confidence, all_probs = models['ensemble'].predict(image_tensor)
+            if return_individual_predictions:
+                pred_idx, confidence, all_probs, individual_predictions = models['ensemble'].predict(
+                    image_tensor, return_all_predictions=True
+                )
+            else:
+                pred_idx, confidence, all_probs = models['ensemble'].predict(image_tensor)
             prediction = CLASS_NAMES[pred_idx]
         else:
             st.error("Ensemble model not available. Please select an individual model.")
-            return None, None, None, None
+            return None, None, None, None, None
     else:
         model_key = model_name.lower().replace('-', '_')
         if model_key in models:
@@ -236,11 +374,11 @@ def predict_image(image, model_name, models, device):
                 }
         else:
             st.error(f"Model {model_name} not available.")
-            return None, None, None, None
+            return None, None, None, None, None
     
     processing_time = time.time() - start_time
     
-    return prediction, confidence, all_probs, processing_time
+    return prediction, confidence, all_probs, processing_time, individual_predictions
 
 def get_target_layer(model_name):
     """Get appropriate target layer for Grad-CAM based on model.
@@ -303,10 +441,10 @@ def generate_gradcam_visualization(image, model, model_name, pred_idx, device):
 def main():
     """Main Streamlit application."""
     
-    # Header
-    st.markdown('<div class="main-header">🧠 Brain Tumor Classification System</div>', 
+    # Header - Minimalistic
+    st.markdown('<div class="main-header">Brain Tumor Classification</div>', 
                 unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Upload an MRI scan for automatic tumor classification using AI</div>', 
+    st.markdown('<div class="sub-header">AI-powered MRI analysis</div>', 
                 unsafe_allow_html=True)
     
     # Load models
@@ -321,8 +459,8 @@ def main():
         st.error(f"Error loading models: {e}")
         st.stop()
     
-    # Sidebar
-    st.sidebar.title("⚙️ Model Selection")
+    # Sidebar - Minimalistic
+    st.sidebar.title("Settings")
     
     # Model selection
     available_model_names = []
@@ -336,50 +474,49 @@ def main():
         available_model_names.append("Ensemble (Majority Voting)")
     
     model_choice = st.sidebar.selectbox(
-        "Choose Model",
+        "Model",
         available_model_names,
-        index=len(available_model_names) - 1 if available_model_names else 0,
-        help="Select the AI model to use for classification"
+        index=len(available_model_names) - 1 if available_model_names else 0
     )
+    
+    # Check if model changed and trigger precomputation
+    if 'last_model' not in st.session_state:
+        st.session_state.last_model = None
+    
+    if st.session_state.last_model != model_choice:
+        st.session_state.last_model = model_choice
+        st.session_state.precompute_needed = True
+    
+    # Compact model info
+    model_descriptions = {
+        "Ensemble (Majority Voting)": "Combines all models",
+        "VGG19": "19-layer CNN",
+        "ResNet50": "50-layer residual network",
+        "EfficientNet-B0": "Efficient scaling architecture"
+    }
+    st.sidebar.caption(model_descriptions.get(model_choice, ""))
     
     st.sidebar.markdown("---")
     
-    # About section
-    st.sidebar.subheader("ℹ️ About")
+    # Classes info - Compact
+    st.sidebar.subheader("Classes")
     st.sidebar.markdown("""
-    This system classifies brain MRI scans into four categories:
-    
-    - 🔴 **Glioma**: Malignant brain tumor
-    - 🟠 **Meningioma**: Usually benign tumor
-    - 🟡 **Pituitary**: Pituitary gland tumor
-    - 🟢 **No Tumor**: Healthy brain scan
-    
-    **Note:** This is an AI screening tool and not a substitute for professional medical diagnosis.
+    🔴 Glioma  
+    🟠 Meningioma  
+    🟡 Pituitary  
+    🟢 No Tumor
     """)
     
     st.sidebar.markdown("---")
-    
-    # Model info
-    st.sidebar.subheader("📈 Model Information")
-    if model_choice == "Ensemble (Majority Voting)":
-        st.sidebar.info("🔗 Combines predictions from VGG19, ResNet50, and EfficientNet-B0 using majority voting for improved accuracy.")
-    elif model_choice == "VGG19":
-        st.sidebar.info("📊 VGG19: Deep convolutional network with 19 layers, pre-trained on ImageNet.")
-    elif model_choice == "ResNet50":
-        st.sidebar.info("📊 ResNet50: 50-layer residual network with skip connections for better gradient flow.")
-    elif model_choice == "EfficientNet-B0":
-        st.sidebar.info("📊 EfficientNet-B0: Efficient architecture with compound scaling for optimal performance.")
-    
-    st.sidebar.markdown(f"**Device:** {device.upper()}")
+    st.sidebar.caption(f"Device: {device.upper()}")
     
     # Main content
     st.markdown("---")
     
-    # Image source selection
-    st.subheader("📂 Select Image Source")
+    # Image source selection - Minimalistic
     image_source = st.radio(
-        "Choose how to provide the MRI image:",
-        ["Upload your own image", "Select from test dataset"],
+        "Image Source",
+        ["Upload", "Test Dataset"],
         horizontal=True
     )
     
@@ -387,12 +524,11 @@ def main():
     image = None
     ground_truth = None
     
-    if image_source == "Upload your own image":
+    if image_source == "Upload":
         # File uploader
         uploaded_file = st.file_uploader(
-            "📤 Choose an MRI image...",
-            type=["jpg", "jpeg", "png"],
-            help="Upload a brain MRI scan in JPG or PNG format"
+            "Choose MRI image",
+            type=["jpg", "jpeg", "png"]
         )
         
         if uploaded_file is not None:
@@ -402,97 +538,168 @@ def main():
         test_images = get_test_images()
         
         if not test_images:
-            st.error("Test dataset not found. Please check that 'cancer_prediction_images/Testing' directory exists.")
+            st.error("Test dataset not found.")
         else:
-            st.info(f"📊 {len(test_images)} test images available")
+            # Initialize predictions cache in session state
+            if 'predictions_cache' not in st.session_state:
+                st.session_state.predictions_cache = {}
             
-            # Filter by class
-            col_filter1, col_filter2 = st.columns([1, 2])
+            # Precompute predictions if needed
+            if st.session_state.get('precompute_needed', True):
+                with st.spinner(f"Precomputing predictions for {len(test_images)} images with {model_choice}..."):
+                    new_predictions = precompute_all_predictions(model_choice, models, device, test_images)
+                    st.session_state.predictions_cache.update(new_predictions)
+                    st.session_state.precompute_needed = False
+            
+            st.caption(f"{len(test_images)} images available")
+            
+            # Filter options - Compact layout
+            col_filter1, col_filter2, col_filter3 = st.columns([1, 1, 1])
             
             with col_filter1:
                 filter_class = st.selectbox(
-                    "Filter by class:",
-                    ["All"] + ["glioma", "meningioma", "notumor", "pituitary"]
+                    "Class",
+                    ["All", "glioma", "meningioma", "notumor", "pituitary"]
                 )
             
             with col_filter2:
-                # Filter images
-                if filter_class == "All":
-                    filtered_images = list(test_images.keys())
-                else:
-                    filtered_images = [path for path, label in test_images.items() if label == filter_class]
+                # Filter for prediction correctness and disagreement
+                filter_incorrect = st.selectbox(
+                    "Prediction",
+                    ["All", "Correct", "Incorrect", "All Models Disagree"]
+                )
+            
+            with col_filter3:
+                if st.button("🎲 Random", use_container_width=True):
+                    st.session_state.trigger_random = True
+            
+            # Filter images by class
+            if filter_class == "All":
+                filtered_images = list(test_images.keys())
+            else:
+                filtered_images = [path for path, label in test_images.items() if label == filter_class]
+            
+            # Filter by prediction correctness (using precomputed predictions)
+            if filter_incorrect != "All":
+                # Get current model key
+                model_key = model_choice.lower().replace('-', '_').replace(' (majority voting)', '').replace('ensemble', 'ensemble')
                 
-                if filtered_images:
-                    # Random selection button
-                    if st.button("🎲 Select Random Image", key="random_btn"):
-                        st.session_state.selected_test_image = random.choice(filtered_images)
+                # Filter based on precomputed predictions
+                filtered_by_correctness = []
+                
+                if filter_incorrect == "All Models Disagree":
+                    # Load predictions from all three individual models
+                    vgg19_cache = load_predictions_cache("VGG19")
+                    resnet50_cache = load_predictions_cache("ResNet50")
+                    efficientnet_cache = load_predictions_cache("EfficientNet-B0")
                     
-                    # Dropdown selection
-                    if 'selected_test_image' not in st.session_state or st.session_state.selected_test_image not in filtered_images:
-                        st.session_state.selected_test_image = filtered_images[0]
-                    
-                    selected_image_path = st.selectbox(
-                        f"Select image ({len(filtered_images)} available):",
-                        filtered_images,
-                        index=filtered_images.index(st.session_state.selected_test_image),
-                        format_func=lambda x: Path(x).name
-                    )
-                    
-                    st.session_state.selected_test_image = selected_image_path
-                    
-                    # Load image and ground truth
-                    image = Image.open(selected_image_path).convert('RGB')
-                    ground_truth = test_images[selected_image_path]
+                    for img_path in filtered_images:
+                        vgg19_pred = vgg19_cache.get(f"{img_path}_vgg19")
+                        resnet50_pred = resnet50_cache.get(f"{img_path}_resnet50")
+                        efficientnet_pred = efficientnet_cache.get(f"{img_path}_efficientnet_b0")
+                        
+                        # Check if all three predictions exist and are all different
+                        if vgg19_pred and resnet50_pred and efficientnet_pred:
+                            if len({vgg19_pred, resnet50_pred, efficientnet_pred}) == 3:
+                                filtered_by_correctness.append(img_path)
                 else:
-                    st.warning(f"No images found for class: {filter_class}")
+                    # Original correct/incorrect filtering
+                    for img_path in filtered_images:
+                        cache_key = f"{img_path}_{model_key}"
+                        
+                        # Get prediction from cache (should always be there after precomputation)
+                        prediction = st.session_state.predictions_cache.get(cache_key)
+                        if prediction is None:
+                            continue  # Skip if somehow not precomputed
+                        
+                        true_label = test_images[img_path]
+                        is_correct = prediction == true_label
+                        
+                        if filter_incorrect == "Correct" and is_correct:
+                            filtered_by_correctness.append(img_path)
+                        elif filter_incorrect == "Incorrect" and not is_correct:
+                            filtered_by_correctness.append(img_path)
+                
+                filtered_images = filtered_by_correctness
+            
+            if filtered_images:
+                # Random selection
+                if 'trigger_random' in st.session_state and st.session_state.trigger_random:
+                    st.session_state.selected_test_image = random.choice(filtered_images)
+                    st.session_state.trigger_random = False
+                
+                # Dropdown selection
+                if 'selected_test_image' not in st.session_state or st.session_state.selected_test_image not in filtered_images:
+                    st.session_state.selected_test_image = filtered_images[0]
+                
+                selected_image_path = st.selectbox(
+                    f"{len(filtered_images)} images",
+                    filtered_images,
+                    index=filtered_images.index(st.session_state.selected_test_image),
+                    format_func=lambda x: Path(x).name
+                )
+                
+                st.session_state.selected_test_image = selected_image_path
+                
+                # Load image and ground truth
+                image = Image.open(selected_image_path).convert('RGB')
+                ground_truth = test_images[selected_image_path]
+            else:
+                st.warning(f"No images match the selected filters.")
     
     if image is not None:
         
-        # Display images
+        # Display images - Minimalistic
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("📷 Original Image")
+            st.markdown("**Original**")
             st.image(image, use_column_width=True)
         
         with col2:
-            st.subheader("🔍 Preprocessed Image")
+            st.markdown("**Preprocessed**")
             preprocessed_display = preprocess_for_display(image)
             st.image(preprocessed_display, use_column_width=True)
-            st.caption("Image resized to 224×224 and normalized")
+            st.caption("224×224, normalized")
         
         st.markdown("---")
         
-        # Prediction button
+        # Prediction button - Centered and minimalistic
         col_button1, col_button2, col_button3 = st.columns([1, 2, 1])
         with col_button2:
             predict_button = st.button(
-                "🔍 Classify Image",
-                type="primary"
+                "Classify",
+                type="primary",
+                use_container_width=True
             )
         
         if predict_button:
-            with st.spinner("🔄 Analyzing MRI scan..."):
-                prediction, confidence, all_probs, proc_time = predict_image(
-                    image, model_choice, models, device
+            with st.spinner("Analyzing..."):
+                prediction, confidence, all_probs, proc_time, individual_preds = predict_image(
+                    image, model_choice, models, device, return_individual_predictions=True
                 )
             
             if prediction is not None:
-                # Success message
-                st.success(f"✅ Analysis complete in {proc_time:.2f}s")
+                # Cache the prediction
+                if ground_truth is not None and image_source == "Test Dataset":
+                    model_key = model_choice.lower().replace('-', '_').replace(' (majority voting)', '').replace('ensemble', 'ensemble')
+                    cache_key = f"{st.session_state.get('selected_test_image', '')}_{model_key}"
+                    st.session_state.predictions_cache[cache_key] = prediction
                 
-                # Ground truth comparison if available
+                # Success message - Minimalistic
+                st.success(f"Completed in {proc_time:.2f}s")
+                
+                # Ground truth comparison if available - Compact
                 if ground_truth is not None:
-                    st.markdown("---")
                     ground_truth_name = CLASS_INFO[ground_truth]['name']
                     is_correct = prediction == ground_truth
                     
                     if is_correct:
-                        st.success(f"✅ **Correct Prediction!** Ground Truth: {CLASS_INFO[ground_truth]['emoji']} {ground_truth_name}")
+                        st.success(f"✓ Correct — Ground truth: {CLASS_INFO[ground_truth]['emoji']} {ground_truth_name}")
                     else:
-                        st.error(f"❌ **Incorrect Prediction.** Ground Truth: {CLASS_INFO[ground_truth]['emoji']} {ground_truth_name}")
+                        st.error(f"✗ Incorrect — Ground truth: {CLASS_INFO[ground_truth]['emoji']} {ground_truth_name}")
                 
-                # Results section
+                # Results section - Minimalistic
                 st.markdown("---")
                 
                 # Get class info
@@ -503,52 +710,82 @@ def main():
                 
                 st.markdown(f'<div class="prediction-box {box_class}">', unsafe_allow_html=True)
                 
-                # Main prediction
-                st.markdown("### 📊 Classification Result")
-                
-                col_pred1, col_pred2 = st.columns([2, 1])
+                # Main prediction - Clean layout
+                col_pred1, col_pred2 = st.columns([3, 1])
                 
                 with col_pred1:
-                    st.markdown(f"## {class_info['emoji']} **{class_info['name'].upper()}**")
+                    st.markdown(f"## {class_info['emoji']} {class_info['name']}")
+                    st.caption(class_info['description'])
                 
                 with col_pred2:
-                    st.metric("Confidence", f"{confidence:.1%}")
-                
-                # Description
-                st.markdown(class_info['description'])
+                    st.metric("", f"{confidence:.0%}")
+                    st.caption("Confidence")
                 
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Class probabilities
-                st.markdown("### 📈 Class Probabilities")
+                # Show individual model predictions for Ensemble
+                if model_choice == "Ensemble (Majority Voting)" and individual_preds is not None:
+                    st.markdown("### Individual Model Predictions")
+                    
+                    cols_models = st.columns(3)
+                    model_order = ['vgg19', 'resnet50', 'efficientnet_b0']
+                    display_names = {'vgg19': 'VGG19', 'resnet50': 'ResNet50', 'efficientnet_b0': 'EfficientNet-B0'}
+                    
+                    for idx, model_key in enumerate(model_order):
+                        if model_key in individual_preds:
+                            pred_info = individual_preds[model_key]
+                            pred_class_name = pred_info['class_name']
+                            pred_class_info = CLASS_INFO[pred_class_name]
+                            pred_confidence = pred_info['probabilities'][pred_info['class']]
+                            
+                            with cols_models[idx]:
+                                # Check if this model agreed with ensemble
+                                agreed = pred_class_name == prediction
+                                border_color = "#22c55e" if agreed else "#ff6b6b"
+                                
+                                st.markdown(f"""
+                                <div style="
+                                    padding: 1rem;
+                                    border-radius: 8px;
+                                    border: 2px solid {border_color};
+                                    background-color: #fafafa;
+                                    margin-bottom: 0.5rem;
+                                ">
+                                    <div style="font-weight: 600; font-size: 0.9rem; color: #666;">{display_names[model_key]}</div>
+                                    <div style="font-size: 1.5rem; margin: 0.5rem 0;">{pred_class_info['emoji']}</div>
+                                    <div style="font-weight: 500;">{pred_class_info['name']}</div>
+                                    <div style="font-size: 1.2rem; font-weight: 600; color: #111; margin-top: 0.5rem;">{pred_confidence:.0%}</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                
+                # Class probabilities - Minimalistic
+                st.markdown("### Probabilities")
                 
                 # Sort probabilities by value
                 sorted_probs = sorted(all_probs.items(), key=lambda x: x[1], reverse=True)
                 
                 for class_name, prob in sorted_probs:
-                    col_prob1, col_prob2 = st.columns([3, 1])
+                    col_prob1, col_prob2 = st.columns([4, 1])
                     
                     with col_prob1:
-                        # Color code the progress bar
+                        label = f"{CLASS_INFO[class_name]['emoji']} {CLASS_INFO[class_name]['name']}"
                         if class_name == prediction:
-                            st.progress(prob, text=f"**{CLASS_INFO[class_name]['emoji']} {CLASS_INFO[class_name]['name']}**")
+                            st.progress(prob, text=f"**{label}**")
                         else:
-                            st.progress(prob, text=f"{CLASS_INFO[class_name]['emoji']} {CLASS_INFO[class_name]['name']}")
+                            st.progress(prob, text=label)
                     
                     with col_prob2:
-                        st.markdown(f"**{prob:.1%}**")
+                        st.markdown(f"{prob:.0%}")
                 
-                # GradCAM Visualization
+                # GradCAM Visualization - Minimalistic
                 st.markdown("---")
-                st.markdown("### 🔥 GradCAM Visualization")
-                st.markdown("GradCAM highlights the regions of the image that influenced the model's decision.")
+                st.markdown("### Attention Map")
+                st.caption("Regions that influenced the decision")
                 
                 pred_idx = CLASS_NAMES.index(prediction)
                 
                 if model_choice == "Ensemble (Majority Voting)":
                     # Show GradCAM for all 3 models side by side
-                    st.markdown("#### All Models")
-                    
                     cols_gradcam = st.columns(3)
                     model_names = ['vgg19', 'resnet50', 'efficientnet_b0']
                     display_names = ['VGG19', 'ResNet50', 'EfficientNet-B0']
@@ -556,7 +793,7 @@ def main():
                     for i, (model_name, display_name) in enumerate(zip(model_names, display_names)):
                         if model_name in models:
                             with cols_gradcam[i]:
-                                with st.spinner(f"Generating {display_name} GradCAM..."):
+                                with st.spinner(f"{display_name}..."):
                                     gradcam_img = generate_gradcam_visualization(
                                         image, 
                                         models[model_name], 
@@ -570,7 +807,7 @@ def main():
                     model_key = model_choice.lower().replace('-', '_')
                     
                     if model_key in models:
-                        with st.spinner(f"Generating GradCAM for {model_choice}..."):
+                        with st.spinner("Generating..."):
                             gradcam_img = generate_gradcam_visualization(
                                 image, 
                                 models[model_key], 
@@ -581,43 +818,30 @@ def main():
                             
                             col_gc1, col_gc2, col_gc3 = st.columns([1, 2, 1])
                             with col_gc2:
-                                st.image(gradcam_img, caption=f"{model_choice} GradCAM", use_column_width=True)
+                                st.image(gradcam_img, use_column_width=True)
                 
-                # Warning box
+                # Warning box - Minimalistic
                 st.markdown("---")
-                st.warning("""
-                ⚠️ **Medical Disclaimer**: This AI system is designed as a screening and educational tool. 
-                It should NOT be used as the sole basis for medical decisions. Always consult with 
-                qualified healthcare professionals for proper diagnosis and treatment.
-                """)
+                st.caption("⚠️ This is a screening tool. Consult medical professionals for diagnosis.")
                 
     else:
-        # Instructions when no file uploaded
+        # Instructions when no file uploaded - Minimalistic
         st.info("""
-        👆 **How to use:**
-        1. Select a model from the sidebar
-        2. Upload a brain MRI scan image
-        3. Click "Classify Image" to get the prediction
-        
-        The system will analyze the image and provide:
-        - Classification result (tumor type or no tumor)
-        - Confidence score
-        - Probability distribution across all classes
+        **How to use:**  
+        1. Select a model  
+        2. Choose an image source  
+        3. Click Classify
         """)
         
-        # Example placeholder
+        # Example placeholder - Compact
         st.markdown("---")
-        st.subheader("📋 Supported Classes")
+        st.markdown("**Classes**")
         
         cols = st.columns(4)
         for i, (class_key, info) in enumerate(CLASS_INFO.items()):
             with cols[i]:
                 st.markdown(f"### {info['emoji']}")
-                st.markdown(f"**{info['name']}**")
-                if class_key == "notumor":
-                    st.markdown("Healthy scan")
-                else:
-                    st.markdown("Tumor detected")
+                st.caption(info['name'])
 
 
 if __name__ == "__main__":
