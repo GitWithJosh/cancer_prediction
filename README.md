@@ -1,67 +1,51 @@
-# 🧠 Brain Tumor Classification System
+# mri-tumor-classification
 
-Deep Learning System zur Klassifikation von Gehirntumoren aus MRI-Bildern mit Web-Interface.
+Four-class brain tumor classification from MRI scans via fine-tuned CNNs and ensemble voting, with a Streamlit interface for single-image inference.
 
-## 📋 Übersicht
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)
+![Git LFS](https://img.shields.io/badge/Git_LFS-F64935?style=flat-square&logo=git&logoColor=white)
 
-Automatische Klassifikation von MRI-Scans in 4 Kategorien mit CNN-Architekturen (VGG19, ResNet50, EfficientNet-B0) und Ensemble-Modell:
+## Overview
 
-- 🔴 **Glioma**: Maligner Hirntumor
-- 🟠 **Meningioma**: Benigner Tumor
-- 🟡 **Pituitary**: Hypophysen-Tumor
-- 🟢 **No Tumor**: Gesunder Scan
+Three pre-trained CNNs — VGG19, ResNet50, and EfficientNet-B0 — are fine-tuned on a dataset of 5,712 MRI images across four classes: glioma, meningioma, pituitary tumor, and no tumor. Each model is trained independently with ImageNet weights frozen during feature extraction and then released for fine-tuning. A majority-voting ensemble combines their predictions for the final classification. Model weights are stored via Git LFS.
 
-## 🚀 Quick Start
+## Models
 
-### 1. Conda-Umgebung erstellen
+| Model | Parameters | Architecture note |
+|---|---|---|
+| VGG19 | 143M | Deep feature extractor, frozen backbone |
+| ResNet50 | 25M | Residual connections, strong baseline |
+| EfficientNet-B0 | 5M | Compound scaling, most parameter-efficient |
+| Ensemble | — | Majority vote across all three |
+
+## Dataset
+
+[Brain Tumor MRI Dataset](https://www.kaggle.com/datasets/masoudnickparvar/brain-tumor-mri-dataset) — 4 classes, 5,712 training images, 1,311 test images, all grayscale.
+
+Place the dataset at `cancer_prediction_images/Training/` and `cancer_prediction_images/Testing/`.
+
+## Quick Start
 
 ```bash
-# Umgebung erstellen
-conda create -n brain-tumor python=3.10 -y
-
-# Aktivieren
-conda activate brain-tumor
-
-# Dependencies installieren
+conda create -n mri-tumor python=3.10 -y
+conda activate mri-tumor
 pip install -r requirements.txt
-```
-
-### 2. Web-App starten
-
-```bash
 streamlit run app.py
 ```
 
-Die App öffnet sich unter `http://localhost:8501`
+Upload a `.jpg` or `.png` MRI scan, select a model, and get a classification with confidence scores.
 
-### 3. Verwendung
-
-1. Model auswählen (VGG19, ResNet50, EfficientNet-B0, Ensemble)
-2. MRI-Bild hochladen (.jpg, .jpeg, .png)
-3. "Classify Image" klicken
-4. Ergebnisse ansehen (Klassifikation, Confidence, Wahrscheinlichkeiten)
-
-## 📁 Projektstruktur
-
-```
-cancer_prediction/
-├── cancer_prediction_images/     # Dataset (Training/Testing)
-├── data/preprocessing.py         # Data Pipeline
-├── models/architectures.py       # CNN Models
-├── training/trainer.py           # Training Logic
-├── evaluation/metrics.py         # Evaluation
-├── app.py                        # Streamlit Web-App
-├── config.yaml                   # Konfiguration
-└── requirements.txt
-```
-
-## 🎯 Modelle trainieren (Optional)
+### Train Models (optional)
 
 ```bash
-# Alle Modelle trainieren
 python training/train_all_models.py
+```
 
-# Oder einzeln in Python:
+Or individually:
+
+```python
 from data.preprocessing import load_and_split_dataset, create_data_loaders
 from models.architectures import create_model
 from training.trainer import train_model
@@ -73,50 +57,25 @@ model = create_model('resnet50', num_classes=4, pretrained=True)
 trained_model, history = train_model(model, train_loader, val_loader, epochs=50)
 ```
 
-## 📊 Model-Architekturen
+Configuration is managed via `config.yaml` — adjust `image_size`, `batch_size`, `epochs`, and `learning_rate` there.
 
-- **VGG19**: 143M Parameter, Feature-Extraction eingefroren
-- **ResNet50**: 25M Parameter, Residual Connections
-- **EfficientNet-B0**: 5M Parameter, Compound Scaling
-- **Ensemble**: Majority Voting über alle 3 Modelle
+## Project Structure
 
-## ⚙️ Konfiguration
-
-`config.yaml` anpassen:
-
-```yaml
-dataset:
-  image_size: 224
-  batch_size: 32
-training:
-  epochs: 5
-  learning_rate: 0.001
+```
+mri-tumor-classification/
+├── data/
+│   └── preprocessing.py          # Dataset loading, augmentation, normalization
+├── models/
+│   └── architectures.py          # VGG19, ResNet50, EfficientNet-B0 factory
+├── training/
+│   ├── trainer.py
+│   └── train_all_models.py
+├── evaluation/
+│   └── metrics.py
+├── app.py                         # Streamlit inference UI
+├── config.yaml
+├── requirements.txt
+└── cancer_prediction_images/      # Dataset (not tracked, use Git LFS for weights)
 ```
 
-## 🔬 Preprocessing
-
-1. Resize auf 224×224
-2. ImageNet-Normalisierung
-3. Data Augmentation (Rotation, Flip, Color Jitter)
-
-## ⚠️ Disclaimer
-
-**WICHTIG**: Forschungs- und Bildungsprojekt. NICHT für klinische Diagnosen verwenden. Immer qualifizierte Ärzte konsultieren.
-
-## 📝 Dokumentation
-
-Siehe [API_DOCS.md](API_DOCS.md) für detaillierte API-Referenz.
-
-## Overleaf Link
-
-https://www.overleaf.com/8995259654wxvxkjpchwhj#1bab1b
-
-## Datasets:
-
-Der primäre Datensatz mit Test- und Trainingsdaten. <br>
-Vier Klassen:  glioma, meningioma, no tumor, pituitary. <br>
-5712 schwarz-weiß Bilder für Training, 1311 schwarz-weiß Bilder für Testing <br>
-Die Bilder sind nicht alle gleich groß <br>
-Paths: cancer_prediction_images/Training/* && cancer_prediction_images/Testing/*
-
-https://www.kaggle.com/datasets/masoudnickparvar/brain-tumor-mri-dataset/data
+> **Note:** This project is for research and educational purposes. Not intended for clinical use.
